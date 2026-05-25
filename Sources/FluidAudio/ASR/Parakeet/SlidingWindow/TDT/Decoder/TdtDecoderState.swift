@@ -62,14 +62,28 @@ public struct TdtDecoderState: Sendable {
         cellState = decoderOutput.featureValue(for: "c_out")?.multiArrayValue ?? cellState
     }
 
-    init(from other: TdtDecoderState) throws {
+    /// Create a deep copy of another decoder state.
+    ///
+    /// `TdtDecoderState` stores Core ML arrays that are mutated in place during
+    /// decoding, so plain Swift value copies still share mutable backing storage.
+    /// Use this initializer when a caller needs a speculative decoder pass that
+    /// must not mutate the original committed state.
+    public init(copying other: TdtDecoderState) throws {
         hiddenState = try MLMultiArray(shape: other.hiddenState.shape, dataType: .float32)
         cellState = try MLMultiArray(shape: other.cellState.shape, dataType: .float32)
         lastToken = other.lastToken
         timeJump = other.timeJump
+        if let otherPredictorOutput = other.predictorOutput {
+            predictorOutput = try MLMultiArray(shape: otherPredictorOutput.shape, dataType: otherPredictorOutput.dataType)
+            predictorOutput?.copyData(from: otherPredictorOutput)
+        }
 
         hiddenState.copyData(from: other.hiddenState)
         cellState.copyData(from: other.cellState)
+    }
+
+    init(from other: TdtDecoderState) throws {
+        try self.init(copying: other)
     }
 
     /// Reset all state variables to initial values
