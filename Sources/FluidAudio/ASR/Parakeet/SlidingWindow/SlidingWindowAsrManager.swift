@@ -26,6 +26,7 @@ public actor SlidingWindowAsrManager {
 
     // Decoder state for this sliding window session
     private var decoderState: TdtDecoderState?
+    private var language: Language?
 
     // Sliding window state
     private var segmentIndex: Int = 0
@@ -151,9 +152,11 @@ public actor SlidingWindowAsrManager {
     ///
     /// Models must be loaded first via `loadModels()` or `loadModels(_:)`
     ///
-    /// - Parameter source: The audio source to use (default: microphone)
+    /// - Parameters:
+    ///   - source: The audio source to use (default: microphone)
+    ///   - language: Optional language hint to apply during streaming decode.
     /// - Throws: ASRError.notInitialized if models are not loaded
-    public func startStreaming(source: AudioSource = .microphone) async throws {
+    public func startStreaming(source: AudioSource = .microphone, language: Language? = nil) async throws {
         guard asrManager != nil else {
             throw ASRError.notInitialized
         }
@@ -161,6 +164,7 @@ public actor SlidingWindowAsrManager {
         logger.info("Starting sliding-window ASR engine for source: \(String(describing: source))...")
 
         self.audioSource = source
+        self.language = language
 
         // Create decoder state with correct layer count for this model
         if let mgr = asrManager {
@@ -209,7 +213,7 @@ public actor SlidingWindowAsrManager {
 
     /// Stream audio data for transcription
     /// - Parameter buffer: Audio buffer in any format (will be converted to 16kHz mono)
-    public func streamAudio(_ buffer: AVAudioPCMBuffer) {
+    public nonisolated func streamAudio(_ buffer: AVAudioPCMBuffer) {
         inputBuilder.yield(buffer)
     }
 
@@ -286,6 +290,7 @@ public actor SlidingWindowAsrManager {
         segmentIndex = 0
         lastProcessedFrame = 0
         accumulatedTokens.removeAll()
+        language = nil
 
         logger.info("SlidingWindowAsrManager reset for source: \(String(describing: self.audioSource))")
     }
@@ -417,7 +422,8 @@ public actor SlidingWindowAsrManager {
                     windowSamples,
                     decoderState: &state,
                     previousTokens: accumulatedTokens,
-                    isLastChunk: isLastChunk
+                    isLastChunk: isLastChunk,
+                    language: language
                 )
             else { return }
 
